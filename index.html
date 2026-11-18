@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="RenderFM-Next: Feed-Forward Adaptive Gaussian Splatting for Interactive Medical Volume Rendering. One feed-forward model turns a CT or MR volume into Gaussians once, then renders, edits transfer functions and clips in real time.">
+  <meta property="og:title" content="RenderFM-Next" />
+  <meta property="og:description" content="RenderFM-Next: Feed-Forward Adaptive Gaussian Splatting for Interactive Medical Volume Rendering" />
+  <meta property="og:url" content="https://gaozhongpai.github.io/renderfmnext/" />
+  <meta property="og:image" content="static/images/renderfmnext.webp" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+
+  <meta name="twitter:title" content="RenderFM-Next">
+  <meta name="twitter:description" content="Feed-Forward Adaptive Gaussian Splatting for Interactive Medical Volume Rendering">
+  <meta name="twitter:image" content="static/images/renderfmnext.webp">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="keywords" content="RenderFM-Next, Render-FM, feed-forward, Gaussian Splatting, medical volume rendering, CT, MRI, transfer function, clipping plane, cinematic rendering">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>RenderFM-Next: Feed-Forward Adaptive Gaussian Splatting for Interactive Medical Volume Rendering</title>
+  <link rel="icon" type="image/webp" href="static/images/renderfmnext.webp">
+
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Bulma -->
+  <link rel="stylesheet" href="static/css/bulma.min.css">
+  <link rel="stylesheet" href="static/css/index.css">
+
+  <!-- NDSplat theme (loaded last so it wins the cascade) -->
+  <link rel="stylesheet" href="static/css/ndsplat-theme.css">
+  <script defer src="static/js/ndsplat-nav.js"></script>
+
+  <style>
+    /* RenderFM-Next-specific accents on top of the NDSplat theme */
+    .fs-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:1.4rem}
+    @media (max-width:768px){.fs-grid{grid-template-columns:1fr}}
+    .fs-card{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:#fff;box-shadow:var(--shadow)}
+    .fs-card h4{margin:0 0 .35rem;font-size:1.0rem;font-weight:700;color:var(--ink)}
+    .fs-card p{margin:0;font-size:.9rem;color:var(--ink-soft);line-height:1.5}
+    .fs-card .tag-line{font-family:var(--nd-mono);font-size:.72rem;letter-spacing:.06em;
+      text-transform:uppercase;color:var(--accent-ink);margin-bottom:.45rem}
+    .fs-cap{color:var(--ink-soft);max-width:820px;margin:0 auto 1.2rem}
+    .fs-note{color:var(--ink-faint);font-size:.85rem;margin-top:.8rem}
+    .rfm-metrics td.c-ds{text-align:left;font-weight:600;vertical-align:middle;background:#fff}
+    .rfm-metrics td.c-ds + td, .rfm-metrics td.c-l{text-align:left;white-space:nowrap}
+    .rfm-metrics tr.fs-block td{border-top:3px solid #11131e}
+    .rfm-metrics tr.fs-ref td{color:#9aa0b0}
+    .rfm-metrics th.sep, .rfm-metrics td.sep{border-left:1px solid var(--line)}
+    .rfm-metrics th.grp{text-align:center}
+    .nd-hero .button.is-static-soon{opacity:.6;cursor:default;pointer-events:none}
+    .fs-demo{display:block;width:100%;border-radius:14px;box-shadow:var(--shadow-lg);background:#000}
+    .fs-qual img{width:100%;border-radius:12px;box-shadow:var(--shadow)}
+  </style>
+</head>
+
+<body>
+
+  <!-- ============ NDSplat NAV ============ -->
+  <header class="nd-nav" id="ndNav">
+    <div class="nd-nav-inner">
+      <a class="nd-brand" href="https://gaozhongpai.github.io/ndsplat/"><span class="mk">ND</span>Splat</a>
+      <nav class="nd-nav-links">
+        <a href="https://gaozhongpai.github.io/ddgs/">DDGS</a>
+        <a href="https://gaozhongpai.github.io/6dgs/">6DGS</a>
+        <a href="https://gaozhongpai.github.io/7dgs/">7DGS</a>
+        <a href="https://rongliu-leo.github.io/universal-beta-splatting/">UBS</a>
+        <a href="https://gaozhongpai.github.io/dgs/">dGS / dBS</a>
+        <a href="https://gaozhongpai.github.io/renderfm/">Render-FM</a>
+        <a href="https://gaozhongpai.github.io/XClipGS/">XClipGS</a>
+        <a href="https://gaozhongpai.github.io/FactorSplat/">FactorSplat</a>
+        <a href="https://gaozhongpai.github.io/renderfmnext/" class="current">RenderFM-Next</a>
+      </nav>
+      <button class="nd-nav-toggle" id="ndNavToggle" aria-label="Toggle navigation">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ======================= HERO ======================= -->
+  <section class="hero nd-hero">
+    <div class="nd-hero-bg" aria-hidden="true"></div>
+    <div class="hero-body">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered">
+          <div class="column has-text-centered">
+            <span class="nd-venue"><span class="dot"></span>arXiv</span>
+            <h1 class="title is-1 publication-title">RenderFM-Next: Feed-Forward Adaptive Gaussian Splatting for Interactive Medical Volume Rendering</h1>
+
+            <div class="is-size-5 publication-authors">
+              <span class="author-block">
+                <a href="https://sites.google.com/site/gaozhongpai/home" target="_blank">Zhongpai Gao</a><sup>*</sup>,</span>
+              <span class="author-block">
+                <a href="https://planche.me/" target="_blank">Benjamin Planche</a>,</span>
+              <span class="author-block">
+                <a href="https://mzhengrpi.github.io/" target="_blank">Meng Zheng</a>,</span>
+              <span class="author-block">
+                <a href="https://scholar.google.com/citations?user=KQnKUHKGFdUC&hl=en" target="_blank">Anwesa Choudhuri</a>,</span>
+              <span class="author-block">
+                <a href="https://scholar.google.com/citations?user=S2BT6ogAAAAJ&hl=en" target="_blank">Terrence Chen</a>,</span>
+              <span class="author-block">
+                <a href="https://wuziyan.com/" target="_blank">Ziyan Wu</a></span>
+            </div>
+
+            <div class="is-size-5 publication-authors">
+              <span class="author-block">United Imaging Intelligence, Boston MA, USA</span>
+              <span class="eql-cntrb"><small><br>zhongpai.gao@uii-ai.com&emsp;<sup>*</sup>Corresponding author</small></span>
+            </div>
+
+            <div class="column has-text-centered">
+              <div class="publication-links">
+                <!-- arXiv (link to be added) -->
+                <span class="link-block">
+                  <a class="external-link button is-normal is-rounded is-dark is-static-soon" aria-disabled="true">
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M3.8423 0a1.0037 1.0037 0 0 0-.922.6078c-.1536.3687-.0438.6275.2938 1.1113l6.9185 8.3597-1.0223 1.1058a1.0393 1.0393 0 0 0 .003 1.4229l1.2292 1.3135-5.4391 6.4444c-.2803.299-.4538.823-.2971 1.1986a1.0253 1.0253 0 0 0 .9585.635.9133.9133 0 0 0 .6891-.3405l5.783-6.126 7.4902 8.0051a.8527.8527 0 0 0 .6835.2597.9575.9575 0 0 0 .8777-.6138c.1577-.377-.017-.7502-.306-1.1407l-7.0518-8.3418 1.0632-1.13a.9626.9626 0 0 0 .0089-1.3165L4.6336.4639s-.3733-.4535-.768-.463zm0 .272h.0166c.2179.0052.4874.2715.5644.3639l.005.006.0052.0055 10.169 10.9905a.6915.6915 0 0 1-.0072.945l-1.0666 1.133-1.4982-1.7724-8.5994-10.39c-.3286-.472-.352-.6183-.2592-.841a.7307.7307 0 0 1 .6704-.4401Zm14.341 1.5701a.877.877 0 0 0-.6554.2418l-5.6962 6.1584 1.6944 1.8319 5.3089-6.5138c.3251-.4335.479-.6603.3247-1.0292a1.1205 1.1205 0 0 0-.9763-.689zm-7.6557 12.2823 1.3186 1.4135-5.7864 6.1295a.6494.6494 0 0 1-.4959.26.7516.7516 0 0 1-.706-.4669c-.1119-.2682.0359-.6864.2442-.9083l.0051-.0055.0047-.0055z"/></svg>
+                    </span>
+                    <span>arXiv (coming soon)</span>
+                  </a>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= STAT STRIP ======================= -->
+  <div class="nd-stats">
+    <div class="nd-stat"><div class="num">+2.8 / +2.4 dB</div><div class="lbl">PSNR over Render-FM &middot; CT / MR</div></div>
+    <div class="nd-stat"><div class="num">4&ndash;6 ms</div><div class="lbl">Per 1600&sup2; view (A100)</div></div>
+    <div class="nd-stat"><div class="num">1&ndash;2 s</div><div class="lbl">Per new scan, one forward pass</div></div>
+  </div>
+
+  <!-- ======================= DEMO VIDEO ======================= -->
+  <section class="section nd-reveal" style="padding-top:2.5rem;">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3 has-text-centered">One Model, Two Modalities</h2>
+      <p class="content has-text-centered fs-cap">
+        A whole-body CT and a whole-body MR scan from the test set, each turned into Gaussians by one forward pass of
+        the same network. Every frame, transfer-function switch and clipping-plane move in the video is rendered from
+        those Gaussians, with no fitting to the scan.
+      </p>
+      <video class="fs-demo" autoplay controls muted loop playsinline preload="metadata"
+             poster="static/videos/renderfm_next_demo_poster.jpg">
+        <source src="static/videos/renderfm_next_demo.mp4" type="video/mp4">
+      </video>
+    </div>
+  </section>
+
+  <!-- ======================= TEASER ======================= -->
+  <section class="hero teaser nd-reveal">
+    <div class="container is-max-desktop">
+      <div class="hero-body">
+        <img src="static/images/teaser.jpg" alt="Render-FM with a fixed 3-mm grid versus RenderFM-Next with learned 3 to 1.5-mm refinement, on clipped CT and MR clinical presets" style="height:100%;width:100%;">
+        <h2 class="subtitle has-text-centered">
+          <b>Adaptive refinement for feed-forward medical Gaussians.</b> (a) Render-FM uses a fixed 3-mm grid, which
+          blurs organ boundaries and cut faces. (b) RenderFM-Next, one CT+MR model, refines to 1.5-mm children
+          (orange) where a learned score expects the most benefit, under a user-set budget. Right: clipped clinical
+          presets; PSNR in dB.
+        </h2>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= ABSTRACT ======================= -->
+  <section class="section hero is-light nd-reveal">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered has-text-centered">
+        <div class="column is-four-fifths">
+          <h2 class="title is-3">Abstract</h2>
+          <div class="content has-text-justified">
+            <p>
+              Path-traced rendering shows CT and MR volumes with realistic lighting, but it restarts after every
+              change of view, clipping plane or transfer function (TF), the map from voxel intensity to colour and
+              opacity, which limits the frame rate. Feed-forward Gaussian splatting models such as Render-FM predict
+              the Gaussians directly from the volume instead of fitting them to each scan, and are fast. Render-FM,
+              however, handles only CT, runs its network again after every TF edit, has no clipping operator, and
+              places its Gaussians on a uniform 3-mm grid that blurs organ boundaries and cut faces.
+            </p>
+            <p>
+              We present <b>RenderFM-Next</b>, a feed-forward model that addresses these limits.
+              <b>One network handles both CT and MR.</b> Its Gaussians are predicted once per volume: a new TF needs
+              no pass of this network, and a clipping plane cuts them exactly, using operators from prior work. The
+              model predicts coarse 3-mm Gaussians for the whole volume and <b>refines them to 1.5&nbsp;mm only where
+              refinement improves the image</b>. A small score head ranks the coarse Gaussians by how much refining
+              them would reduce the rendering error; at render time the user chooses how many are refined, and those
+              next to a clipping plane are always refined, which sharpens cut faces.
+            </p>
+            <p>
+              We build a benchmark of about 2,000 CT and MR scans with path-traced references under clinical presets,
+              TF edits and clipping. RenderFM-Next improves over Render-FM retrained on this benchmark by
+              <b>2.8&nbsp;dB on CT and 2.4&nbsp;dB on MR</b> and renders a 1600&times;1600 view in
+              <b>4&ndash;6&nbsp;ms</b>. Refinement adds 0.30 / 0.69&nbsp;dB over the same model trained without it
+              (0.51 / 1.17&nbsp;dB on cut faces), and refining a learned 10% of the coarse Gaussians matches a random
+              50% with 2.4&times; fewer Gaussians.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= METHOD ======================= -->
+  <section class="section nd-reveal">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column is-full-width">
+          <h2 class="title is-3 has-text-centered">How It Works</h2>
+          <p class="content has-text-centered fs-cap">
+            Once per volume, one U-Net for CT and MR predicts 3-mm parent Gaussians, up to eight 1.5-mm children per
+            parent, and a score that ranks the parents. At render time the network is not run again: the top-ranked
+            parents under the budget, and those next to the clipping plane, are replaced by their children.
+          </p>
+          <img src="static/images/pipeline.jpg" alt="RenderFM-Next overview: once-per-volume prediction of parents, children and scores; render-time refinement, transfer-function head and exact clipping" style="width:100%;">
+
+          <div class="fs-grid">
+            <div class="fs-card">
+              <div class="tag-line">Predict once &middot; CT and MR</div>
+              <h4>One network, one pass</h4>
+              <p>The same weights serve both modalities. The transfer function and the clipping plane are not network
+                 inputs, so editing either never re-runs the U-Net.</p>
+            </div>
+            <div class="fs-card">
+              <div class="tag-line">Refine &middot; learned score</div>
+              <h4>Detail where it pays off</h4>
+              <p>A small score head ranks coarse Gaussians by how much refining them would reduce the rendering
+                 error. The user sets the budget at render time.</p>
+            </div>
+            <div class="fs-card">
+              <div class="tag-line">Interact &middot; TF and clip</div>
+              <h4>Edit and cut in real time</h4>
+              <p>A light TF head recolours the same Gaussians, and an exact clipping operator cuts them. Gaussians
+                 next to the plane are always refined, which sharpens cut faces.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= QUANTITATIVE ======================= -->
+  <section class="section hero is-light nd-reveal">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column is-full-width has-text-centered">
+          <h2 class="title is-3">Quantitative Results</h2>
+          <p class="content has-text-centered fs-cap">
+            Test set: 67 CT and 115 MR patients, with path-traced references under the base TF, clinical presets,
+            TF edits and clipping. PSNR in dB, per-patient mean.
+          </p>
+          <div class="rfm-table-wrap">
+            <table class="rfm-metrics">
+              <thead>
+                <tr>
+                  <th rowspan="2"></th><th rowspan="2">Method</th>
+                  <th colspan="3" class="grp">All reported families</th>
+                  <th colspan="4" class="grp sep">PSNR&uarr; by family</th>
+                  <th rowspan="2" class="sep">#G (M)</th><th rowspan="2">FPS&uarr;</th>
+                </tr>
+                <tr>
+                  <th>PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th>
+                  <th class="sep">Base uncut</th><th>Base clipped</th><th>Clinical presets</th><th>Preset + edit</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td class="c-ds" rowspan="4">CT</td><td>Render-FM (retrained)</td>
+                  <td>26.87</td><td>0.936</td><td>0.085</td><td class="sep">26.91</td><td>27.25</td><td>25.72</td><td>26.32</td><td class="sep">0.35</td><td>99</td></tr>
+                <tr><td class="c-l">RenderFM-Next (parents only)</td>
+                  <td>29.39</td><td>0.948</td><td>0.068</td><td class="sep">29.96</td><td>29.69</td><td>27.32</td><td class="best">28.98</td><td class="sep">0.35</td><td>225</td></tr>
+                <tr class="rfm-ours"><td class="c-l">RenderFM-Next (joint)</td>
+                  <td class="best">29.69</td><td class="best">0.951</td><td class="best">0.057</td><td class="sep best">30.31</td><td class="best">30.05</td><td class="best">27.42</td><td>28.95</td><td class="sep">0.89</td><td>162</td></tr>
+                <tr class="fs-ref"><td class="c-l">RenderFM-Next (CT specialist)</td>
+                  <td>29.80</td><td>0.952</td><td>0.056</td><td class="sep">30.41</td><td>30.20</td><td>27.53</td><td>28.85</td><td class="sep">0.90</td><td>163</td></tr>
+
+                <tr class="fs-block"><td class="c-ds" rowspan="4">MR</td><td>Render-FM (retrained)</td>
+                  <td>26.25</td><td>0.921</td><td>0.148</td><td class="sep">26.74</td><td>25.56</td><td>28.40</td><td>26.78</td><td class="sep">0.17</td><td>159</td></tr>
+                <tr><td class="c-l">RenderFM-Next (parents only)</td>
+                  <td>27.95</td><td>0.932</td><td>0.126</td><td class="sep">28.71</td><td>27.27</td><td>28.79</td><td>27.50</td><td class="sep">0.17</td><td>350</td></tr>
+                <tr class="rfm-ours"><td class="c-l">RenderFM-Next (joint)</td>
+                  <td class="best">28.63</td><td class="best">0.939</td><td class="best">0.107</td><td class="sep best">29.23</td><td class="best">28.11</td><td class="best">29.31</td><td class="best">28.13</td><td class="sep">0.42</td><td>229</td></tr>
+                <tr class="fs-ref"><td class="c-l">RenderFM-Next (MR specialist)</td>
+                  <td>28.93</td><td>0.940</td><td>0.107</td><td class="sep">29.55</td><td>28.38</td><td>29.55</td><td>28.44</td><td class="sep">0.41</td><td>224</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="fs-note">
+            Render-FM is retrained on this benchmark, one model per modality. Parents only: RenderFM-Next trained
+            without children (same number of Gaussians as Render-FM). #G: Gaussians per view in millions. FPS at
+            1600&sup2; on one A100. Bold = best single model; grey rows are one model per modality, shown for reference.
+          </p>
+
+          <!-- ---------- Capabilities and cost ---------- -->
+          <h3 class="title is-4 has-text-centered" style="margin-top:3.2rem;">Render-FM and RenderFM-Next side by side</h3>
+          <p class="content has-text-centered fs-cap">
+            Capabilities on top, quality and cost below (CT / MR). All times on one A100 GPU at 1600&sup2;.
+          </p>
+          <div class="rfm-table-wrap">
+            <table class="rfm-metrics">
+              <thead>
+                <tr><th rowspan="2"></th><th rowspan="2">Render-FM</th><th colspan="2" class="grp sep">RenderFM-Next (Ours)</th></tr>
+                <tr><th class="sep">Parents only</th><th>Children (20% refined)</th></tr>
+              </thead>
+              <tbody>
+                <tr><td class="c-l">CT and MR in one network</td><td>&ndash;</td><td class="sep">&#10003;</td><td>&#10003;</td></tr>
+                <tr><td class="c-l">New TF without a U-Net pass</td><td>&ndash;</td><td class="sep">&#10003;</td><td>&#10003;</td></tr>
+                <tr><td class="c-l">Exact clipping-plane cut</td><td>&ndash;</td><td class="sep">&#10003;</td><td>&#10003;</td></tr>
+                <tr><td class="c-l">Adjustable refinement</td><td>&ndash;</td><td class="sep">&ndash;</td><td>&#10003;</td></tr>
+                <tr><td class="c-l">Refined cut faces</td><td>&ndash;</td><td class="sep">&ndash;</td><td>&#10003;</td></tr>
+                <tr class="fs-block"><td class="c-l">PSNR (dB)&uarr;</td><td>26.87 / 26.25</td><td class="sep">29.39 / 27.95</td><td class="best">29.69 / 28.63</td></tr>
+                <tr><td class="c-l">Frame rate (FPS)&uarr;</td><td>99 / 159</td><td class="sep best">225 / 350</td><td>162 / 229</td></tr>
+                <tr><td class="c-l">New TF (ms)&darr;</td><td>71 / 34</td><td class="sep best">21 / 15</td><td>51 / 35</td></tr>
+                <tr><td class="c-l">New volume (s)&darr;</td><td>1.99 / 1.56</td><td class="sep best">0.82 / 0.54</td><td>1.73 / 1.06</td></tr>
+                <tr><td class="c-l">Peak memory (GB)&darr;</td><td>3.3 / 1.7</td><td class="sep best">3.0 / 1.5</td><td>7.7 / 4.9</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="fs-note">Moving a clipping plane takes 17 / 12 ms, because only the band next to the cut changes.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= QUALITATIVE ======================= -->
+  <section class="section nd-reveal">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3 has-text-centered">Qualitative Comparison</h2>
+      <p class="content has-text-centered fs-cap">
+        Clipped clinical presets on held-out scans; full-frame PSNR in dB. Children sharpen cut faces and thin
+        structures that the parents-only model and Render-FM (retrained) blur.
+      </p>
+      <div class="fs-qual">
+        <img src="static/images/qualitative.jpg" alt="Qualitative comparison on clipped CT and MR clinical presets: reference, Render-FM, parents only, RenderFM-Next">
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RELATED WORK (cross-reference network) ============ -->
+  <section class="section nd-related nd-reveal">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3 has-text-centered" style="margin-bottom: 2rem;">The N-Dimensional Splatting Line</h2>
+      <div class="nd-related-grid">
+        <a class="nd-rel" href="https://gaozhongpai.github.io/ddgs/">
+          <span class="nd-rel-venue">NeurIPS 2024</span>
+          <span class="nd-rel-name">DDGS</span>
+          <span class="nd-rel-desc">Direction-disentangled Gaussians for realistic, differentiable X-ray DRRs.</span>
+        </a>
+        <a class="nd-rel" href="https://gaozhongpai.github.io/6dgs/">
+          <span class="nd-rel-venue">ICLR 2025</span>
+          <span class="nd-rel-name">6DGS</span>
+          <span class="nd-rel-desc">Direction-aware 6D Gaussians for view-dependent volumetric rendering.</span>
+        </a>
+        <a class="nd-rel" href="https://gaozhongpai.github.io/7dgs/">
+          <span class="nd-rel-venue">ICCV 2025</span>
+          <span class="nd-rel-name">7DGS</span>
+          <span class="nd-rel-desc">Unified spatial-temporal-angular Gaussians for dynamic, view-dependent scenes.</span>
+        </a>
+        <a class="nd-rel" href="https://rongliu-leo.github.io/universal-beta-splatting/">
+          <span class="nd-rel-venue">ICLR 2026</span>
+          <span class="nd-rel-name">UBS</span>
+          <span class="nd-rel-desc">Universal Beta Splatting: anisotropic Beta kernels across space, angle, and time.</span>
+        </a>
+        <a class="nd-rel" href="https://gaozhongpai.github.io/dgs/">
+          <span class="nd-rel-venue">NeurIPS 2026</span>
+          <span class="nd-rel-name"><em class="tight">d</em>GS / <em class="tight">d</em>BS</span>
+          <span class="nd-rel-desc">Direct conditional parameterization &mdash; kernel-agnostic, up to 7.7&times; faster slicing.</span>
+        </a>
+        <a class="nd-rel" href="https://gaozhongpai.github.io/renderfm/">
+          <span class="nd-rel-venue">ECCV 2026</span>
+          <span class="nd-rel-name">Render-FM</span>
+          <span class="nd-rel-desc">Feedforward 6DGS for medical CT &mdash; 500&times; faster than per-scan optimization.</span>
+        </a>
+        <a class="nd-rel" href="https://gaozhongpai.github.io/XClipGS/">
+          <span class="nd-rel-venue">arXiv</span>
+          <span class="nd-rel-name">XClipGS</span>
+          <span class="nd-rel-desc">Exact, training-free half-space clipping with clip-aware interior supervision.</span>
+        </a>
+        <a class="nd-rel" href="https://gaozhongpai.github.io/FactorSplat/">
+          <span class="nd-rel-venue">arXiv</span>
+          <span class="nd-rel-name">FactorSplat</span>
+          <span class="nd-rel-desc">Editable transfer functions for medical Gaussian proxies &mdash; no retraining per preset.</span>
+        </a>
+        <a class="nd-rel is-self" href="https://gaozhongpai.github.io/renderfmnext/">
+          <span class="nd-rel-venue">arXiv</span>
+          <span class="nd-rel-name">RenderFM-Next</span>
+          <span class="nd-rel-desc">One feed-forward model for CT and MR with learned refinement, TF edits and exact clipping.</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!--BibTex citation -->
+  <section class="section" id="BibTeX">
+    <div class="container is-max-desktop content">
+      <h2 class="title">BibTeX</h2>
+      <pre><code>@article{gao2026renderfmnext,
+  title={Feed-Forward Adaptive Gaussian Splatting for Interactive Medical Volume Rendering},
+  author={Gao, Zhongpai and Planche, Benjamin and Zheng, Meng and Choudhuri, Anwesa
+          and Chen, Terrence and Wu, Ziyan},
+  journal={arXiv preprint},
+  year={2026}
+}</code></pre>
+    </div>
+  </section>
+  <!--End BibTex citation -->
+
+
+  <!-- ======================= FOOTER ======================= -->
+  <footer class="footer">
+    <div class="container">
+      <div class="columns is-centered">
+        <div class="column is-8">
+          <div class="content has-text-centered">
+            <p>
+              This page was built using the
+              <a href="https://github.com/eliahuhorwitz/Academic-project-page-template" target="_blank">Academic Project Page Template</a>,
+              adapted from the <a href="https://nerfies.github.io" target="_blank">Nerfies</a> project page.
+              Licensed under a
+              <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/" target="_blank">Creative
+                Commons Attribution-ShareAlike 4.0 International License</a>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+</body>
+
+</html>
