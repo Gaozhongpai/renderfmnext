@@ -1,6 +1,6 @@
 # RenderFM-Next — Project Page
 
-Project page for **RenderFM-Next: Feed-Forward Adaptive Gaussian Splatting for Interactive Medical Volume Rendering**.
+Project page for **Feed-Forward Adaptive Gaussian Splatting for Interactive Medical Volume Rendering**.
 Zhongpai Gao, Benjamin Planche, Meng Zheng, Anwesa Choudhuri, Terrence Chen, Ziyan Wu.
 
 Live at https://gaozhongpai.github.io/renderfmnext/ — part of the [NDSplat](https://gaozhongpai.github.io/ndsplat/) line
